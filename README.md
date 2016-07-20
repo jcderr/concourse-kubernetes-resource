@@ -27,7 +27,7 @@ resources:
 * `admin_key`: *Optional.* Base64 encoded PEM. Required if `cluster-url` is https.
 * `admin_cert`: *Optional.* Base64 encoded PEM. Required if `cluster-url` is https.
 
-#### `out`: Begins Packer Build Process
+#### `out`: Begins Kubernetes Deploy Process
 
 Applies a kubectl action.
 

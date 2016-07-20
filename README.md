@@ -35,8 +35,8 @@ Applies a kubectl action.
 * `namespace`: *Required.* Kubernetes namespace to operate upon.
 * `image_name`: *Required.* Path to file containing docker image name.
 * `image_tag`: *Required.* Path to file container docker image tag.
-* `resource_type`: *Optional.* Resource type to operate upon (valid values: `deployment`, `replicationcontroller`).
-* `resource_name`: *Optional.* Resource name to operate upon.
+* `resource_type`: *Required.* Resource type to operate upon (valid values: `deployment`, `replicationcontroller`).
+* `resource_name`: *Required.* Resource name to operate upon.
 
 ## Example
 

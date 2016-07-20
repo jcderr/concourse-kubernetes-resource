@@ -7,6 +7,11 @@ Check, Get, and Put Kubernetes Resources
 ```
 resource_types:
 - name: kubernetes
+  type: docker-image
+  source:
+    repository: jcderr/concourse-kubernetes-resource
+resources:
+- name: kubernetes
   type: kubernetes
   source:
     cluster_url: https://hostname:port

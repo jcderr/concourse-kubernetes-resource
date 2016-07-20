@@ -1,0 +1,76 @@
+#!/bin/bash
+set -e
+set -o pipefail
+exec 3>&1 # use fd 3 for script output
+exec 1>&2 # send normal stdout to stderr for logging
+jq -M -S . < /dev/stdin | tee /tmp/input
+
+deploy() {
+    DEPLOYMENT=$1
+    IMAGE=$2
+    
+    [ -n "$DEPLOYMENT" ] || exit 1
+    [ -n "$IMAGE" ] || exit 1
+    
+    $KUBECTL set image deployment/$DEPLOYMENT $DEPLOYMENT=$IMAGE
+}
+
+rollingupdate() {
+    RC=$1
+    IMAGE=$2
+    
+    [ -n "$RC" ] || exit 1
+    [ -n "$IMAGE" ] || exit 1
+    
+    $KUBECTL rolling-update rc/$RC --image=$IMAGE
+}
+
+cd /tmp/build/put
+
+mkdir -p /root/.kube
+
+KUBE_URL=$(jq -r .source.cluster_url < /tmp/input)
+NAMESPACE=$(jq -r .params.namespace < /tmp/input)
+KUBECTL="/usr/local/bin/kubectl --server=$KUBE_URL --namespace=$NAMESPACE"
+
+# configure SSL Certs if available
+if [[ "$KUBE_URL" =~ https.* ]]; then
+    KUBE_CA=$(jq -r .source.cluster_ca < /tmp/input)
+    KUBE_KEY=$(jq -r .source.admin_key < /tmp/input)
+    KUBE_CERT=$(jq -r .source.admin_cert < /tmp/input)
+    CA_PATH="/root/.kube/ca.pem"
+    KEY_PATH="/root/.kube/key.pem"
+    CERT_PATH="/root/.kube/cert.pem"
+    
+    echo "$KUBE_CA" | base64 -d > $CA_PATH
+    echo "$KUBE_KEY" | base64 -d > $KEY_PATH
+    echo "$KUBE_CERT" | base64 -d > $CERT_PATH
+    
+    KUBECTL="$KUBECTL --certificate-authority=$CA_PATH --client-key=$KEY_PATH --client-certificate=$CERT_PATH"
+fi
+
+# get image name
+IMG_FILE=$(jq -r .params.image_name < /tmp/input)
+IMG=$(cat $IMG_FILE)
+TAG_FILE=$(jq -r .params.image_tag < /tmp/input)
+TAG=$(cat $TAG_FILE)
+IMG="$IMG:$TAG"
+
+# get kube resource id
+RESOURCE_TYPE=$(jq -r .params.resource_type < /tmp/input)
+RESOURCE_NAME=$(jq -r .params.resource_name < /tmp/input)
+
+export KUBECTL
+
+# do things
+case $RESOURCE_TYPE in
+    deployment)
+    deploy $RESOURCE_NAME $IMG;;
+    replicationcontroller)
+    rollingupdate $RESOURCE_NAME $IMG;;
+    *)
+    exit 1
+esac
+
+result="$(jq -n "{version:{container:\"$IMG\"}, $RESOURCE_TYPE:\"$RESOURCE_NAME\"}")"
+echo "$result" | jq -s add  >&3

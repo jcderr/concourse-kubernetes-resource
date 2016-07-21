@@ -88,5 +88,5 @@ case $RESOURCE_TYPE in
     exit 1
 esac
 
-result="$(jq -n "{version:{container:\"$IMG\"}, $RESOURCE_TYPE:\"$RESOURCE_NAME\"}")"
+result="$(jq -n "{version:{container:\"$IMG\"}}")"
 echo "$result" | jq -s add  >&3

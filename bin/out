@@ -42,7 +42,8 @@ cd $1
 mkdir -p /root/.kube
 
 KUBE_URL=$(jq -r .source.cluster_url < /tmp/input)
-NAMESPACE=$(jq -r .params.namespace < /tmp/input)
+NAMESPACE=$(jq -r .source.namespace < /tmp/input)
+
 KUBECTL="/usr/local/bin/kubectl --server=$KUBE_URL --namespace=$NAMESPACE"
 
 # configure SSL Certs if available

@@ -40,5 +40,5 @@ RESOURCE="$RESOURCE_TYPE/$RESOURCE_NAME"
 
 IMG=$($KUBECTL get -o json $RESOURCE | jq -r '.spec.template.spec.containers[0].image')
 
-result="$(jq -n "{version:{container:\"$IMG\"}, resource:\"$RESOURCE\"}")"
+result="$(jq -n "{version:{container:\"$IMG\"}}")"
 echo "$result" | jq -s add  >&3

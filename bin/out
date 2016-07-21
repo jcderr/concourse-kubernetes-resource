@@ -25,7 +25,19 @@ rollingupdate() {
     $KUBECTL rolling-update rc/$RC --image=$IMAGE
 }
 
-cd /tmp/build/put
+start_job() {
+    JOB=$1
+    IMAGE=$2
+    UID=${3:-$(date +%s)}
+    
+    [ -n "$JOB" ] || exit 1
+    [ -n "$IMAGE" ] || exit 1
+    [ -n "$UID" ] || exit 1
+
+    cat $JOB | IMAGE=$IMAGE UID=$UID envsubst | $KUBECTL create -f -
+}
+
+cd $1
 
 mkdir -p /root/.kube
 
@@ -59,6 +71,7 @@ IMG="$IMG:$TAG"
 # get kube resource id
 RESOURCE_TYPE=$(jq -r .params.resource_type < /tmp/input)
 RESOURCE_NAME=$(jq -r .params.resource_name < /tmp/input)
+RESOURCE_PATH=$(jq -r .params.resource_path < /tmp/input)
 
 export KUBECTL
 
@@ -68,6 +81,8 @@ case $RESOURCE_TYPE in
     deploy $RESOURCE_NAME $IMG;;
     replicationcontroller)
     rollingupdate $RESOURCE_NAME $IMG;;
+    job)
+    start_job $RESOURCE_PATH $IMG $(date +%s);;
     *)
     exit 1
 esac

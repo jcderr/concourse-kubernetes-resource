@@ -70,8 +70,8 @@ TAG=$(cat $TAG_FILE)
 IMG="$IMG:$TAG"
 
 # get kube resource id
-RESOURCE_TYPE=$(jq -r .params.resource_type < /tmp/input)
-RESOURCE_NAME=$(jq -r .params.resource_name < /tmp/input)
+RESOURCE_TYPE=$(jq -r .source.resource_type < /tmp/input)
+RESOURCE_NAME=$(jq -r .source.resource_name < /tmp/input)
 RESOURCE_PATH=$(jq -r .params.resource_path < /tmp/input)
 
 export KUBECTL

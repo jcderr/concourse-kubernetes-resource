@@ -3,6 +3,7 @@ set -e
 set -o pipefail
 exec 3>&1 # use fd 3 for script output
 exec 1>&2 # send normal stdout to stderr for logging
+jq -M -S . < /dev/stdin | tee /tmp/input
 
 deploy() {
     DEPLOYMENT=$1

@@ -34,11 +34,16 @@ fi
 RESOURCE_TYPE=$(jq -r .source.resource_type < /tmp/input)
 RESOURCE_NAME=$(jq -r .source.resource_name < /tmp/input)
 
-export KUBECTL
+if [[ -z "$RESOURCE_TYPE" ]] || [[ -z "$RESOURCE_NAME" ]]; then
+    result=""
+else
+    export KUBECTL
 
-RESOURCE="$RESOURCE_TYPE/$RESOURCE_NAME"
+    RESOURCE="$RESOURCE_TYPE/$RESOURCE_NAME"
 
-IMG=$($KUBECTL get -o json $RESOURCE | jq -r '.spec.template.spec.containers[0].image')
+    IMG=$($KUBECTL get -o json $RESOURCE | jq -r '.spec.template.spec.containers[0].image')
 
-result="$(jq -n "{version:{container:\"$IMG\"}}")"
+    result="$(jq -n "{version:{container:\"$IMG\"}}")"
+fi
+
 echo "$result" | jq -s add  >&3

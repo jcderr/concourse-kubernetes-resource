@@ -1,7 +1,5 @@
 # Kubernetes Resource
 
-Check, Get, and Put Kubernetes Resources
-
 ## Installing
 
 ```
@@ -21,17 +19,19 @@ resources:
     admin_cert: _base64 encoded certificate_
     resource_type: deployment
     resource_name: some_pod_name
+    container_name: some_container
 ```
 
 ## Source Configuration
 
 * `cluster_url`: *Required.* URL to Kubernetes Master API service
 * `namespace`: *Required.* Kubernetes namespace.
-* `cluster_ca`: *Optional.* Base64 encoded PEM. Required if `cluster-url` is https.
-* `admin_key`: *Optional.* Base64 encoded PEM. Required if `cluster-url` is https.
-* `admin_cert`: *Optional.* Base64 encoded PEM. Required if `cluster-url` is https.
+* `cluster_ca`: *Optional.* Base64 encoded PEM. Required if `cluster_url` is https.
+* `admin_key`: *Optional.* Base64 encoded PEM. Required if `cluster_url` is https.
+* `admin_cert`: *Optional.* Base64 encoded PEM. Required if `cluster_url` is https.
 * `resource_type`: *Required.* Resource type to operate upon (valid values: `deployment`, `replicationcontroller`, `job`).
 * `resource_name`: *Required.* Resource name to operate upon.
+* `container_name`: *Optional.* For multi-container pods, specify the name of the container being updated. (Default: resource_name)
 
 #### `out`: Begins Kubernetes Deploy Process
 
@@ -54,6 +54,7 @@ resources:
     namespace: alpha
     resource_type: deployment
     resource_name: myapp
+    container_name: mycontainer
     cluster_ca: _base64 encoded CA pem_
     admin_key: _base64 encoded key pem_
     admin_cert: _base64 encoded certificate pem_

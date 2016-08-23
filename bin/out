@@ -7,21 +7,23 @@ jq -M -S . < /dev/stdin > /tmp/input
 
 deploy() {
     DEPLOYMENT=$1
-    IMAGE=$2
-    
+    CONTAINER=$2
+    IMAGE=$3
+
     [ -n "$DEPLOYMENT" ] || exit 1
     [ -n "$IMAGE" ] || exit 1
-    
-    $KUBECTL set image deployment/$DEPLOYMENT $DEPLOYMENT=$IMAGE
+    [ -n "$CONTAINER" ] || exit 1
+
+    $KUBECTL set image deployment/$DEPLOYMENT $CONTAINER=$IMAGE
 }
 
 rollingupdate() {
     RC=$1
     IMAGE=$2
-    
+
     [ -n "$RC" ] || exit 1
     [ -n "$IMAGE" ] || exit 1
-    
+
     $KUBECTL rolling-update rc/$RC --image=$IMAGE
 }
 
@@ -29,13 +31,16 @@ start_job() {
     JOB=$1
     IMAGE=$2
     UID=${3:-$(date +%s)}
-    
+
     [ -n "$JOB" ] || exit 1
     [ -n "$IMAGE" ] || exit 1
     [ -n "$UID" ] || exit 1
 
     cat $JOB | IMAGE=$IMAGE UID=$UID envsubst | $KUBECTL create -f -
 }
+
+DEBUG=$(jq -r .source.debug < /tmp/input)
+[[ "$DEBUG" == "true" ]] && { echo "Enabling debug mode.";set -x; }
 
 cd $1
 
@@ -54,11 +59,11 @@ if [[ "$KUBE_URL" =~ https.* ]]; then
     CA_PATH="/root/.kube/ca.pem"
     KEY_PATH="/root/.kube/key.pem"
     CERT_PATH="/root/.kube/cert.pem"
-    
+
     echo "$KUBE_CA" | base64 -d > $CA_PATH
     echo "$KUBE_KEY" | base64 -d > $KEY_PATH
     echo "$KUBE_CERT" | base64 -d > $CERT_PATH
-    
+
     KUBECTL="$KUBECTL --certificate-authority=$CA_PATH --client-key=$KEY_PATH --client-certificate=$CERT_PATH"
 fi
 
@@ -73,13 +78,26 @@ IMG="$IMG:$TAG"
 RESOURCE_TYPE=$(jq -r .source.resource_type < /tmp/input)
 RESOURCE_NAME=$(jq -r .source.resource_name < /tmp/input)
 RESOURCE_PATH=$(jq -r .params.resource_path < /tmp/input)
+CONTAINER_NAME=$(jq -r .source.container_name < /tmp/input)
+
+if [[ -z "$RESOURCE_TYPE" ]]; then
+    RESOURCE_TYPE=$(jq -r .params.resource_type < /tmp/input)
+fi
+
+if [[ -z "$RESOURCE_NAME" ]]; then
+    RESOURCE_TYPE=$(jq -r .params.resource_name < /tmp/input)
+fi
+
+if [[ "$CONTAINER_NAME" == "null" ]]; then
+  CONTAINER_NAME=$RESOURCE_NAME
+fi
 
 export KUBECTL
 
 # do things
 case $RESOURCE_TYPE in
     deployment)
-    deploy $RESOURCE_NAME $IMG;;
+    deploy $RESOURCE_NAME $CONTAINER_NAME $IMG;;
     replicationcontroller)
     rollingupdate $RESOURCE_NAME $IMG;;
     job)

@@ -33,12 +33,16 @@ fi
 # get kube resource id
 RESOURCE_TYPE=$(jq -r .source.resource_type < /tmp/input)
 RESOURCE_NAME=$(jq -r .source.resource_name < /tmp/input)
+if [[ -z "$RESOURCE_TYPE" ]] || [[ -z "$RESOURCE_NAME" ]]; then
+    result=$(jq -n "[]")
+else
+    export KUBECTL
 
-export KUBECTL
+    RESOURCE="$RESOURCE_TYPE/$RESOURCE_NAME"
 
-RESOURCE="$RESOURCE_TYPE/$RESOURCE_NAME"
+    IMG=$($KUBECTL get -o json $RESOURCE | jq -r '.spec.template.spec.containers[0].image')
 
-IMG=$($KUBECTL get -o json $RESOURCE | jq -r '.spec.template.spec.containers[0].image')
+    result=$(jq -n "[{container:\"$IMG\"}]")
+fi
 
-result="$(jq -n "[{container:\"$IMG\"}]")"
 echo "$result" | jq -s add  >&3

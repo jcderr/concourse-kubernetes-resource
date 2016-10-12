@@ -25,8 +25,8 @@ deploy() {
     else
 	echo "binaries differ, so updating deployment/$DEPLOYMENT"
 
-	$KUBECTL set image deployment/$DEPLOYMENT $CONTAINER=$IMAGE
-	$KUBECTL annotate --overwrite deployment/$DEPLOYMENT concourse.binary_md5="$BINARY_MD5"
+	$KUBECTL set image deployment/$DEPLOYMENT $CONTAINER=$IMAGE --record
+	$KUBECTL annotate --overwrite deployment/$DEPLOYMENT concourse.binary_md5="$BINARY_MD5" --record
     fi
 }
 
@@ -37,7 +37,7 @@ rollingupdate() {
     [ -n "$RC" ] || exit 1
     [ -n "$IMAGE" ] || exit 1
 
-    $KUBECTL rolling-update rc/$RC --image=$IMAGE
+    $KUBECTL rolling-update rc/$RC --image=$IMAGE --record
 }
 
 start_job() {
@@ -49,7 +49,7 @@ start_job() {
     [ -n "$IMAGE" ] || exit 1
     [ -n "$UID" ] || exit 1
 
-    cat $JOB | IMAGE=$IMAGE UID=$UID envsubst | $KUBECTL create -f -
+    cat $JOB | IMAGE=$IMAGE UID=$UID envsubst | $KUBECTL create --record -f -
 }
 
 DEBUG=$(jq -r .source.debug < /tmp/input)

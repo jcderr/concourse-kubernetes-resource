@@ -9,12 +9,25 @@ deploy() {
     DEPLOYMENT=$1
     CONTAINER=$2
     IMAGE=$3
+    BINARY_MD5=$4
 
     [ -n "$DEPLOYMENT" ] || exit 1
     [ -n "$IMAGE" ] || exit 1
     [ -n "$CONTAINER" ] || exit 1
 
-    $KUBECTL set image deployment/$DEPLOYMENT $CONTAINER=$IMAGE
+    $KUBECTL get deployments --show-labels --output=json > /tmp/deployments.json
+    OLD_BINARY_MD5=`cat /tmp/deployments.json | jq --arg deployment "${DEPLOYMENT}" '.items[] | select(.metadata.name == $deployment) | .metadata.annotations."concourse.binary_md5"' | tr '"' '\n' | grep -v -E "^$"`
+
+    echo "old binary MD5 = $OLD_BINARY_MD5"
+    echo "new binary MD5 = $BINARY_MD5"
+    if [[ "$BINARY_MD5" == "$OLD_BINARY_MD5" ]]; then
+	echo "identical binaries, so skipping deployment"
+    else
+	echo "binaries differ, so updating deployment/$DEPLOYMENT"
+
+	$KUBECTL set image deployment/$DEPLOYMENT $CONTAINER=$IMAGE --record
+	$KUBECTL annotate --overwrite deployment/$DEPLOYMENT concourse.binary_md5="$BINARY_MD5" --record
+    fi
 }
 
 rollingupdate() {
@@ -24,7 +37,7 @@ rollingupdate() {
     [ -n "$RC" ] || exit 1
     [ -n "$IMAGE" ] || exit 1
 
-    $KUBECTL rolling-update rc/$RC --image=$IMAGE
+    $KUBECTL rolling-update rc/$RC --image=$IMAGE --record
 }
 
 start_job() {
@@ -36,7 +49,7 @@ start_job() {
     [ -n "$IMAGE" ] || exit 1
     [ -n "$UID" ] || exit 1
 
-    cat $JOB | IMAGE=$IMAGE UID=$UID envsubst | $KUBECTL create -f -
+    cat $JOB | IMAGE=$IMAGE UID=$UID envsubst | $KUBECTL create --record -f -
 }
 
 DEBUG=$(jq -r .source.debug < /tmp/input)
@@ -80,6 +93,15 @@ RESOURCE_NAME=$(jq -r .source.resource_name < /tmp/input)
 RESOURCE_PATH=$(jq -r .params.resource_path < /tmp/input)
 CONTAINER_NAME=$(jq -r .source.container_name < /tmp/input)
 
+# calculate MD5 if the binary path exists
+BINARY_PATH=$(jq -r .source.binary_path < /tmp/input)
+if [[ $BINARY_PATH ]]; then
+    BINARY_MD5=`md5sum $BINARY_PATH | grep -E -o '^[^ ]+'`
+    echo "binary path $BINARY_PATH found"
+else
+    echo "binary path $BINARY_PATH not found"
+fi
+
 if [[ -z "$RESOURCE_TYPE" ]]; then
     RESOURCE_TYPE=$(jq -r .params.resource_type < /tmp/input)
 fi
@@ -97,7 +119,7 @@ export KUBECTL
 # do things
 case $RESOURCE_TYPE in
     deployment)
-    deploy $RESOURCE_NAME $CONTAINER_NAME $IMG;;
+    deploy $RESOURCE_NAME $CONTAINER_NAME $IMG $BINARY_MD5;;
     replicationcontroller)
     rollingupdate $RESOURCE_NAME $IMG;;
     job)

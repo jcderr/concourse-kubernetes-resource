@@ -17,6 +17,8 @@ deploy() {
     [ -n "$CONTAINER" ] || exit 1
 
     $KUBECTL set image "deployment/$DEPLOYMENT" "$CONTAINER=$IMAGE"
+
+    $KUBECTL rollout status "deployment/$DEPLOYMENT"
 }
 
 rollingupdate() {
@@ -27,6 +29,7 @@ rollingupdate() {
     [ -n "$IMAGE" ] || exit 1
 
     $KUBECTL rolling-update "rc/$RC" --image="$IMAGE"
+    # TODO make sure rolling udate is finished
 }
 
 start_job() {
@@ -39,6 +42,7 @@ start_job() {
     [ -n "$UID" ] || exit 1
 
     cat "$JOB" | IMAGE=$IMAGE UID=$UID envsubst | $KUBECTL create -f -
+    # TODO make sure job is started
 }
 
 DEBUG=$(jq -r .source.debug < "$payload")

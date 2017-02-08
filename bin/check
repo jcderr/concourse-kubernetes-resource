@@ -1,41 +1,18 @@
 #!/bin/bash
-set -e
-set -o pipefail
+set -euo pipefail
+
 exec 3>&1 # use fd 3 for script output
 exec 1>&2 # send normal stdout to stderr for logging
+
 echo "Checking k8s resource"
 
-payload="$(mktemp "$TMPDIR/k8s-resource-request.XXXXXX")"
-cat > "$payload" <&0
+source $(dirname "$0")/common.sh
 
 cd "$1"
 
-mkdir -p /root/.kube
-
-KUBE_URL=$(jq -r .source.cluster_url < "$payload")
-NAMESPACE=$(jq -r .source.namespace < "$payload")
-
-KUBECTL="/usr/local/bin/kubectl --server=$KUBE_URL --namespace=$NAMESPACE"
-
-# configure SSL Certs if available
-if [[ "$KUBE_URL" =~ https.* ]]; then
-    KUBE_CA=$(jq -r .source.cluster_ca < "$payload")
-    KUBE_KEY=$(jq -r .source.admin_key < "$payload")
-    KUBE_CERT=$(jq -r .source.admin_cert < "$payload")
-    CA_PATH="/root/.kube/ca.pem"
-    KEY_PATH="/root/.kube/key.pem"
-    CERT_PATH="/root/.kube/cert.pem"
-
-    echo "$KUBE_CA" | base64 -d > $CA_PATH
-    echo "$KUBE_KEY" | base64 -d > $KEY_PATH
-    echo "$KUBE_CERT" | base64 -d > $CERT_PATH
-
-    KUBECTL="$KUBECTL --certificate-authority=$CA_PATH --client-key=$KEY_PATH --client-certificate=$CERT_PATH"
-fi
-
 # get kube resource id
-RESOURCE_TYPE=$(jq -r .source.resource_type < "$payload")
-RESOURCE_NAME=$(jq -r .source.resource_name < "$payload")
+RESOURCE_TYPE=$(jq -r .source.resource_type < "$PAYLOAD")
+RESOURCE_NAME=$(jq -r .source.resource_name < "$PAYLOAD")
 if [[ -z "$RESOURCE_TYPE" ]] || [[ -z "$RESOURCE_NAME" ]]; then
     result=$(jq -n "[]")
 else
@@ -43,7 +20,7 @@ else
 
     RESOURCE="$RESOURCE_TYPE/$RESOURCE_NAME"
 
-    IMG=$($KUBECTL get -o json "$RESOURCE" | jq -r '.spec.template.spec.containers[0].image')
+    IMG=$("$KUBECTL" get -o json "$RESOURCE" | jq -r '.spec.template.spec.containers[0].image')
 
     result=$(jq -n "[{container:\"$IMG\"}]")
 fi

@@ -51,12 +51,13 @@ function get_kubectl_cmd {
         kubectl+=" $(_get_ca_flag "$payload")"
     fi
 
-    # TODO allow client cert + key as well
-    if [[ "$k8s_auth" =~ password ]]; then
+    if [[ "$k8s_auth" =~ password ]]
+    then
         kubectl+=" $(_get_user_password_flags "$payload")"
+    elif [[ "$k8s_auth" =~ certs ]]
+    then
+        kubectl+=" $(_get_client_key_cert_flags "$payload")"
     fi
-
-    echo "$kubectl" > /kubectl
 
     echo "$kubectl"
 }

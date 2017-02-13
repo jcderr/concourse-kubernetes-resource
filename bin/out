@@ -26,7 +26,7 @@ rollingupdate() {
     [ -n "$RC" ] || exit 1
     [ -n "$IMAGE" ] || exit 1
 
-    $KUBECTL rolling-update "rc/$RC" --image="$IMAGE"
+    $KUBECTL rolling-update --image=$IMAGE $RC 
 }
 
 start_job() {

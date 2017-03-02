@@ -4,9 +4,7 @@ set -euo pipefail
 exec 3>&1 # use fd 3 for script output
 exec 1>&2 # send normal stdout to stderr for logging
 
-echo "Checking k8s resource"
-
-source $(dirname "$0")/common.sh
+source "$(dirname "$0")/common.sh"
 
 cd "$1"
 
@@ -20,7 +18,7 @@ else
 
     RESOURCE="$RESOURCE_TYPE/$RESOURCE_NAME"
 
-    IMG=$("$KUBECTL" get -o json "$RESOURCE" | jq -r '.spec.template.spec.containers[0].image')
+    IMG=$($KUBECTL get -o json "$RESOURCE" | jq -r '.spec.template.spec.containers[0].image')
 
     result=$(jq -n "[{container:\"$IMG\"}]")
 fi

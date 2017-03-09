@@ -1,11 +1,10 @@
 #!/bin/bash
-set -e
-set -o pipefail
+set -euo pipefail
+
 exec 3>&1 # use fd 3 for script output
 exec 1>&2 # send normal stdout to stderr for logging
 
-payload="$(mktemp "$TMPDIR/k8s-resource-request.XXXXXX")"
-cat > "$payload" <&0
+source "$(dirname "$0")/common.sh"
 
 deploy() {
     DEPLOYMENT=$1
@@ -17,6 +16,8 @@ deploy() {
     [ -n "$CONTAINER" ] || exit 1
 
     $KUBECTL set image "deployment/$DEPLOYMENT" "$CONTAINER=$IMAGE"
+
+    $KUBECTL rollout status "deployment/$DEPLOYMENT"
 }
 
 rollingupdate() {
@@ -27,74 +28,50 @@ rollingupdate() {
     [ -n "$IMAGE" ] || exit 1
 
     $KUBECTL rolling-update "rc/$RC" --image="$IMAGE"
+    # TODO make sure rolling udate is finished
 }
 
 start_job() {
     JOB=$1
-    IMAGE=$2
-    UID=${3:-$(date +%s)}
+    CONTAINER=$2
+    IMAGE=$3
 
     [ -n "$JOB" ] || exit 1
     [ -n "$IMAGE" ] || exit 1
-    [ -n "$UID" ] || exit 1
+    [ -n "$CONTAINER" ] || exit 1
 
-    cat "$JOB" | IMAGE=$IMAGE UID=$UID envsubst | $KUBECTL create -f -
+    $KUBECTL set image "job/$JOB" "$CONTAINER=$IMAGE"
 }
 
-DEBUG=$(jq -r .source.debug < "$payload")
+DEBUG=$(jq -r .source.debug < "$PAYLOAD")
 [[ "$DEBUG" == "true" ]] && { echo "Enabling debug mode.";set -x; }
 
 cd "$1"
 
-mkdir -p /root/.kube
-
-KUBE_URL=$(jq -r .source.cluster_url < "$payload")
-NAMESPACE=$(jq -r .source.namespace < "$payload")
-
-KUBECTL="/usr/local/bin/kubectl --server=$KUBE_URL --namespace=$NAMESPACE"
-
-# configure SSL Certs if available
-if [[ "$KUBE_URL" =~ https.* ]]; then
-    KUBE_CA=$(jq -r .source.cluster_ca < "$payload")
-    KUBE_KEY=$(jq -r .source.admin_key < "$payload")
-    KUBE_CERT=$(jq -r .source.admin_cert < "$payload")
-    CA_PATH="/root/.kube/ca.pem"
-    KEY_PATH="/root/.kube/key.pem"
-    CERT_PATH="/root/.kube/cert.pem"
-
-    echo "$KUBE_CA" | base64 -d > $CA_PATH
-    echo "$KUBE_KEY" | base64 -d > $KEY_PATH
-    echo "$KUBE_CERT" | base64 -d > $CERT_PATH
-
-    KUBECTL="$KUBECTL --certificate-authority=$CA_PATH --client-key=$KEY_PATH --client-certificate=$CERT_PATH"
-fi
-
 # get image name
-IMG_FILE=$(jq -r .params.image_name < "$payload")
+IMG_FILE=$(jq -r .params.image_name < "$PAYLOAD")
 IMG=$(cat "$IMG_FILE")
-TAG_FILE=$(jq -r .params.image_tag < "$payload")
+TAG_FILE=$(jq -r .params.image_tag < "$PAYLOAD")
 TAG=$(cat "$TAG_FILE")
 IMG="$IMG:$TAG"
 
 # get kube resource id
-RESOURCE_TYPE=$(jq -r .source.resource_type < "$payload")
-RESOURCE_NAME=$(jq -r .source.resource_name < "$payload")
-RESOURCE_PATH=$(jq -r .params.resource_path < "$payload")
-CONTAINER_NAME=$(jq -r .source.container_name < "$payload")
+RESOURCE_TYPE=$(jq -r .source.resource_type < "$PAYLOAD")
+RESOURCE_NAME=$(jq -r .source.resource_name < "$PAYLOAD")
+RESOURCE_PATH=$(jq -r .params.resource_path < "$PAYLOAD")
+CONTAINER_NAME=$(jq -r .source.container_name < "$PAYLOAD")
 
 if [[ -z "$RESOURCE_TYPE" ]]; then
-    RESOURCE_TYPE=$(jq -r .params.resource_type < "$payload")
+    RESOURCE_TYPE=$(jq -r .params.resource_type < "$PAYLOAD")
 fi
 
 if [[ -z "$RESOURCE_NAME" ]]; then
-    RESOURCE_TYPE=$(jq -r .params.resource_name < "$payload")
+    RESOURCE_TYPE=$(jq -r .params.resource_name < "$PAYLOAD")
 fi
 
 if [[ "$CONTAINER_NAME" == "null" ]]; then
   CONTAINER_NAME=$RESOURCE_NAME
 fi
-
-export KUBECTL
 
 # do things
 case $RESOURCE_TYPE in
@@ -103,7 +80,7 @@ case $RESOURCE_TYPE in
     replicationcontroller)
     rollingupdate "$RESOURCE_NAME" "$IMG";;
     job)
-    start_job "$RESOURCE_PATH" "$IMG" "$(date +%s)";;
+    start_job "$RESOURCE_PATH" "$CONTAINER_NAME" "$IMG";;
     *)
     exit 1
 esac

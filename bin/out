@@ -33,15 +33,14 @@ rollingupdate() {
 
 start_job() {
     JOB=$1
-    IMAGE=$2
-    UID=${3:-$(date +%s)}
+    CONTAINER=$2
+    IMAGE=$3
 
     [ -n "$JOB" ] || exit 1
     [ -n "$IMAGE" ] || exit 1
-    [ -n "$UID" ] || exit 1
+    [ -n "$CONTAINER" ] || exit 1
 
-    cat "$JOB" | IMAGE=$IMAGE UID=$UID envsubst | $KUBECTL create -f -
-    # TODO make sure job is started
+    $KUBECTL set image "job/$JOB" "$CONTAINER=$IMAGE"
 }
 
 DEBUG=$(jq -r .source.debug < "$PAYLOAD")
@@ -81,7 +80,7 @@ case $RESOURCE_TYPE in
     replicationcontroller)
     rollingupdate "$RESOURCE_NAME" "$IMG";;
     job)
-    start_job "$RESOURCE_PATH" "$IMG" "$(date +%s)";;
+    start_job "$RESOURCE_PATH" "$CONTAINER_NAME" "$IMG";;
     *)
     exit 1
 esac

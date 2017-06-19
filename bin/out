@@ -4,6 +4,8 @@ set -o pipefail
 exec 3>&1 # use fd 3 for script output
 exec 1>&2 # send normal stdout to stderr for logging
 
+echo "Starting out"
+
 payload="$(mktemp "$TMPDIR/k8s-resource-request.XXXXXX")"
 cat > "$payload" <&0
 
@@ -30,16 +32,6 @@ deploy() {
 	$KUBECTL set image "deployment/$DEPLOYMENT" "$CONTAINER=$IMAGE" --record
 	$KUBECTL annotate --overwrite "deployment/$DEPLOYMENT" concourse.binary_md5="$BINARY_MD5" --record
     fi
-}
-
-rollingupdate() {
-    RC=$1
-    IMAGE=$2
-
-    [ -n "$RC" ] || exit 1
-    [ -n "$IMAGE" ] || exit 1
-
-    $KUBECTL rolling-update "rc/$RC" --image="$IMAGE" --record
 }
 
 start_job() {
@@ -122,8 +114,6 @@ export KUBECTL
 case $RESOURCE_TYPE in
     deployment)
     deploy "$RESOURCE_NAME" "$CONTAINER_NAME" "$IMG" "$BINARY_MD5";;
-    replicationcontroller)
-    rollingupdate "$RESOURCE_NAME" "$IMG";;
     job)
     start_job "$RESOURCE_PATH" "$IMG" "$(date +%s)";;
     *)
@@ -131,4 +121,5 @@ case $RESOURCE_TYPE in
 esac
 
 result="$(jq -n "{version:{container:\"$IMG\"}}")"
+echo "Out complete"
 echo "$result" | jq -s add  >&3

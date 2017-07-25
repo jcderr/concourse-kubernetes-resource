@@ -89,7 +89,11 @@ CONTAINER_NAME=$(jq -r .source.container_name < "$payload")
 
 # calculate MD5 if the binary path exists
 BINARY_PATH=$(jq -r .source.binary_path < "$payload")
-if [[ $BINARY_PATH ]]; then
+if [[ "$BINARY_PATH" == "null" ]]; then
+	BINARY_PATH=
+fi
+
+if [[ -n $BINARY_PATH ]]; then
     BINARY_MD5=`md5sum $BINARY_PATH | grep -E -o '^[^ ]+'`
     echo "binary path $BINARY_PATH found"
 else

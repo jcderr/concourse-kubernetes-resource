@@ -20,18 +20,23 @@ deploy() {
     [ -n "$CONTAINER" ] || exit 1
 
     $KUBECTL get deployments --show-labels --output=json > /tmp/deployments.json
-    OLD_BINARY_MD5=`cat /tmp/deployments.json | jq --arg deployment "${DEPLOYMENT}" '.items[] | select(.metadata.name == $deployment) | .metadata.annotations."concourse.binary_md5"' | tr '"' '\n' | grep -v -E "^$"`
 
-    echo "old binary MD5 = $OLD_BINARY_MD5"
-    echo "new binary MD5 = $BINARY_MD5"
-    if [[ "$BINARY_MD5" == "$OLD_BINARY_MD5" ]]; then
-	echo "identical binaries, so skipping deployment"
+    if [[ -n "$BINARY_MD5" ]]; then
+        OLD_BINARY_MD5=`cat /tmp/deployments.json | jq --arg deployment "${DEPLOYMENT}" '.items[] | select(.metadata.name == $deployment) | .metadata.annotations."concourse.binary_md5"' | tr '"' '\n' | grep -v -E "^$"`
+
+        echo "old binary MD5 = $OLD_BINARY_MD5"
+        echo "new binary MD5 = $BINARY_MD5"
+        if [[ "$BINARY_MD5" == "$OLD_BINARY_MD5" ]]; then
+    	echo "identical binaries, so skipping deployment"
+        else
+        	echo "binaries differ, so updating deployment/$DEPLOYMENT"
+        	$KUBECTL set image "deployment/$DEPLOYMENT" "$CONTAINER=$IMAGE" --record
+        	$KUBECTL annotate --overwrite "deployment/$DEPLOYMENT" concourse.binary_md5="$BINARY_MD5" --record
+        fi
     else
-	echo "binaries differ, so updating deployment/$DEPLOYMENT"
-
-	$KUBECTL set image "deployment/$DEPLOYMENT" "$CONTAINER=$IMAGE" --record
-	$KUBECTL annotate --overwrite "deployment/$DEPLOYMENT" concourse.binary_md5="$BINARY_MD5" --record
+        $KUBECTL set image "deployment/$DEPLOYMENT" "$CONTAINER=$IMAGE" --record        
     fi
+
 }
 
 start_job() {

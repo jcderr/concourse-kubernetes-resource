@@ -13,7 +13,8 @@ deploy() {
     DEPLOYMENT=$1
     CONTAINER=$2
     IMAGE=$3
-    BINARY_MD5=$4
+    DEPLOYMENT_PATH=$4
+    IMG_PREFIX=$5
 
     [ -n "$DEPLOYMENT" ] || exit 1
     [ -n "$IMAGE" ] || exit 1
@@ -21,20 +22,11 @@ deploy() {
 
     $KUBECTL get deployments --show-labels --output=json > /tmp/deployments.json
 
-    if [[ -n "$BINARY_MD5" ]]; then
-        OLD_BINARY_MD5=`cat /tmp/deployments.json | jq --arg deployment "${DEPLOYMENT}" '.items[] | select(.metadata.name == $deployment) | .metadata.annotations."concourse.binary_md5"' | tr '"' '\n' | grep -v -E "^$"`
-
-        echo "old binary MD5 = $OLD_BINARY_MD5"
-        echo "new binary MD5 = $BINARY_MD5"
-        if [[ "$BINARY_MD5" == "$OLD_BINARY_MD5" ]]; then
-    	echo "identical binaries, so skipping deployment"
-        else
-        	echo "binaries differ, so updating deployment/$DEPLOYMENT"
-        	$KUBECTL set image "deployment/$DEPLOYMENT" "$CONTAINER=$IMAGE" --record
-        	$KUBECTL annotate --overwrite "deployment/$DEPLOYMENT" concourse.binary_md5="$BINARY_MD5" --record
-        fi
+    if [[ -n "$DEPLOYMENT_PATH" ]]; then
+        echo "Deployment path set to $DEPLOYMENT_PATH"
+        cat "${DEPLOYMENT_PATH}" | sed "s~image:[ \t]*\($IMG_PREFIX\/.*\).*~$IMAGE~" | $KUBECTL replace --record -f -
     else
-        $KUBECTL set image "deployment/$DEPLOYMENT" "$CONTAINER=$IMAGE" --record        
+        $KUBECTL set image "deployment/$DEPLOYMENT" "$CONTAINER=$IMAGE" --record
     fi
 
 }
@@ -91,19 +83,8 @@ RESOURCE_TYPE=$(jq -r .source.resource_type < "$payload")
 RESOURCE_NAME=$(jq -r .source.resource_name < "$payload")
 RESOURCE_PATH=$(jq -r .params.resource_path < "$payload")
 CONTAINER_NAME=$(jq -r .source.container_name < "$payload")
-
-# calculate MD5 if the binary path exists
-BINARY_PATH=$(jq -r .source.binary_path < "$payload")
-if [[ "$BINARY_PATH" == "null" ]]; then
-	BINARY_PATH=
-fi
-
-if [[ -n $BINARY_PATH ]]; then
-    BINARY_MD5=`md5sum $BINARY_PATH | grep -E -o '^[^ ]+'`
-    echo "binary path $BINARY_PATH found"
-else
-    echo "binary path $BINARY_PATH not found"
-fi
+DEPLOYMENT_PATH=$(jq -r .source.deployment_file < "$payload")
+IMG_PREFIX=$(jq -r .source.image_prefix < "$payload")
 
 if [[ -z "$RESOURCE_TYPE" ]]; then
     RESOURCE_TYPE=$(jq -r .params.resource_type < "$payload")
@@ -111,6 +92,14 @@ fi
 
 if [[ -z "$RESOURCE_NAME" ]]; then
     RESOURCE_TYPE=$(jq -r .params.resource_name < "$payload")
+fi
+
+if [[ -z "DEPLOYMENT_PATH" ]]; then
+    DEPLOYMENT_PATH=$(jq -r .params.deployment_file < "$payload")
+fi
+
+if [[ -z "IMG_PREFIX" ]]; then
+    IMG_PREFIX=$(jq -r .params.image_prefix < "$payload")
 fi
 
 if [[ "$CONTAINER_NAME" == "null" ]]; then
@@ -122,7 +111,7 @@ export KUBECTL
 # do things
 case $RESOURCE_TYPE in
     deployment)
-    deploy "$RESOURCE_NAME" "$CONTAINER_NAME" "$IMG" "$BINARY_MD5";;
+    deploy "$RESOURCE_NAME" "$CONTAINER_NAME" "$IMG" "$DEPLOYMENT_PATH" "$IMG_PREFIX";;
     job)
     start_job "$RESOURCE_PATH" "$IMG" "$(date +%s)";;
     *)

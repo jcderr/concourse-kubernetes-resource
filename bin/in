@@ -4,6 +4,7 @@ set -o pipefail
 exec 3>&1 # use fd 3 for script output
 exec 1>&2 # send normal stdout to stderr for logging
 
+echo "Starting in"
 payload="$(mktemp "$TMPDIR/k8s-resource-request.XXXXXX")"
 cat > "$payload" <&0
 
@@ -48,4 +49,5 @@ else
     result="$(jq -n "{version:{container:\"$IMG\"}}")"
 fi
 
+echo "In complete"
 echo "$result" | jq -s add  >&3

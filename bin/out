@@ -4,6 +4,8 @@ set -o pipefail
 exec 3>&1 # use fd 3 for script output
 exec 1>&2 # send normal stdout to stderr for logging
 
+echo "Starting out"
+
 payload="$(mktemp "$TMPDIR/k8s-resource-request.XXXXXX")"
 cat > "$payload" <&0
 
@@ -11,22 +13,23 @@ deploy() {
     DEPLOYMENT=$1
     CONTAINER=$2
     IMAGE=$3
+    BINARY_MD5=$4
+    DEPLOYMENT_PATH=$5
+    IMG_PREFIX=$6
 
     [ -n "$DEPLOYMENT" ] || exit 1
     [ -n "$IMAGE" ] || exit 1
     [ -n "$CONTAINER" ] || exit 1
 
-    $KUBECTL set image "deployment/$DEPLOYMENT" "$CONTAINER=$IMAGE"
-}
+    $KUBECTL get deployments --show-labels --output=json > /tmp/deployments.json
 
-rollingupdate() {
-    RC=$1
-    IMAGE=$2
+    if [[ -n "$DEPLOYMENT_PATH" ]]; then
+        echo "Deployment path set to $DEPLOYMENT_PATH"
+        cat "${DEPLOYMENT_PATH}" | sed "s~image:\s+\($IMG_PREFIX\/.*\).*~$IMAGE~"  | $KUBECTL replace --record -f -
+    else
+        $KUBECTL set image "deployment/$DEPLOYMENT" "$CONTAINER=$IMAGE" --record
+    fi
 
-    [ -n "$RC" ] || exit 1
-    [ -n "$IMAGE" ] || exit 1
-
-    $KUBECTL rolling-update "rc/$RC" --image="$IMAGE"
 }
 
 start_job() {
@@ -38,7 +41,7 @@ start_job() {
     [ -n "$IMAGE" ] || exit 1
     [ -n "$UID" ] || exit 1
 
-    cat "$JOB" | IMAGE=$IMAGE UID=$UID envsubst | $KUBECTL create -f -
+    cat "$JOB" | IMAGE=$IMAGE UID=$UID envsubst | $KUBECTL create --record -f -
 }
 
 DEBUG=$(jq -r .source.debug < "$payload")
@@ -81,6 +84,21 @@ RESOURCE_TYPE=$(jq -r .source.resource_type < "$payload")
 RESOURCE_NAME=$(jq -r .source.resource_name < "$payload")
 RESOURCE_PATH=$(jq -r .params.resource_path < "$payload")
 CONTAINER_NAME=$(jq -r .source.container_name < "$payload")
+DEPLOYMENT_PATH=$(jq -r .source.deployment_file < "$payload")
+IMG_PREFIX=$(jq -r .source.image_prefix < "$payload")
+
+# calculate MD5 if the binary path exists
+BINARY_PATH=$(jq -r .source.binary_path < "$payload")
+if [[ "$BINARY_PATH" == "null" ]]; then
+	BINARY_PATH=
+fi
+
+if [[ -n $BINARY_PATH ]]; then
+    BINARY_MD5=`md5sum $BINARY_PATH | grep -E -o '^[^ ]+'`
+    echo "binary path $BINARY_PATH found"
+else
+    echo "binary path $BINARY_PATH not found"
+fi
 
 if [[ -z "$RESOURCE_TYPE" ]]; then
     RESOURCE_TYPE=$(jq -r .params.resource_type < "$payload")
@@ -88,6 +106,14 @@ fi
 
 if [[ -z "$RESOURCE_NAME" ]]; then
     RESOURCE_TYPE=$(jq -r .params.resource_name < "$payload")
+fi
+
+if [[ -z "DEPLOYMENT_PATH" ]]; then
+    DEPLOYMENT_PATH=$(jq -r .params.deployment_file < "$payload")
+fi
+
+if [[ -z "IMG_PREFIX" ]]; then
+    IMG_PREFIX=$(jq -r .params.image_prefix < "$payload")
 fi
 
 if [[ "$CONTAINER_NAME" == "null" ]]; then
@@ -99,9 +125,7 @@ export KUBECTL
 # do things
 case $RESOURCE_TYPE in
     deployment)
-    deploy "$RESOURCE_NAME" "$CONTAINER_NAME" "$IMG";;
-    replicationcontroller)
-    rollingupdate "$RESOURCE_NAME" "$IMG";;
+    deploy "$RESOURCE_NAME" "$CONTAINER_NAME" "$IMG" "$BINARY_MD5" "$DEPLOYMENT_PATH" "$IMG_PREFIX";;
     job)
     start_job "$RESOURCE_PATH" "$IMG" "$(date +%s)";;
     *)
@@ -109,4 +133,5 @@ case $RESOURCE_TYPE in
 esac
 
 result="$(jq -n "{version:{container:\"$IMG\"}}")"
+echo "Out complete"
 echo "$result" | jq -s add  >&3

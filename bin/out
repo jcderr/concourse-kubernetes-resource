@@ -22,10 +22,12 @@ deploy() {
 
     $KUBECTL get deployments --show-labels --output=json > /tmp/deployments.json
 
-    if [[ -n "$DEPLOYMENT_PATH" ]]; then
+    if [[ -n "$DEPLOYMENT_PATH" ]] && [[ "$DEPLOYMENT_PATH" != "null" ]] && [[ -n "$IMG_PREFIX" ]] && [[ "$IMG_PREFIX" != "null" ]]; then
         echo "Deployment path set to $DEPLOYMENT_PATH"
+        echo "Image prefix set to $IMG_PREFIX"
         cat "${DEPLOYMENT_PATH}" | sed "s~image:[ \t]*\($IMG_PREFIX\/.*\).*~$IMAGE~" | $KUBECTL replace --record -f -
     else
+        echo 'Setting image only.'
         $KUBECTL set image "deployment/$DEPLOYMENT" "$CONTAINER=$IMAGE" --record
     fi
 
@@ -48,6 +50,7 @@ DEBUG=$(jq -r .source.debug < "$payload")
 
 cd "$1"
 
+ls /root/.kube 2>/dev/null || echo '/root/.kube does not exist'
 mkdir -p /root/.kube
 
 KUBE_URL=$(jq -r .source.cluster_url < "$payload")

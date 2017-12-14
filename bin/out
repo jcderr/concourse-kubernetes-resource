@@ -9,6 +9,13 @@ echo "Starting out"
 payload="$(mktemp "$TMPDIR/k8s-resource-request.XXXXXX")"
 cat > "$payload" <&0
 
+rollback() {
+    DEPLOYMENT=$1
+    [ -n "$DEPLOYMENT" ] || exit 1
+    echo "Running: $KUBECTL rollout undo deployment/$DEPLOYMENT"
+    $KUBECTL rollout undo "deployment/$DEPLOYMENT"
+}
+
 deploy() {
     DEPLOYMENT=$1
     CONTAINER=$2
@@ -30,7 +37,6 @@ deploy() {
         echo 'Setting image only.'
         $KUBECTL set image "deployment/$DEPLOYMENT" "$CONTAINER=$IMAGE" --record
     fi
-
 }
 
 start_job() {
@@ -80,6 +86,7 @@ IMG=$(cat "$IMG_FILE")
 TAG_FILE=$(jq -r .params.image_tag < "$payload")
 TAG=$(cat "$TAG_FILE")
 IMG="$IMG:$TAG"
+ROLLBACK=$(jq -r .params.rollback < "$payload")
 
 # get kube resource id
 RESOURCE_TYPE=$(jq -r .source.resource_type < "$payload")
@@ -111,15 +118,20 @@ fi
 
 export KUBECTL
 
-# do things
-case $RESOURCE_TYPE in
-    deployment)
-    deploy "$RESOURCE_NAME" "$CONTAINER_NAME" "$IMG" "$DEPLOYMENT_PATH" "$IMG_PREFIX";;
-    job)
-    start_job "$RESOURCE_PATH" "$IMG" "$(date +%s)";;
-    *)
-    exit 1
-esac
+if [[ "$RESOURCE_TYPE" = 'deployment' ]]; then
+    if [[ "$ROLLBACK" = "true" ]]; then
+        rollback "$RESOURCE_NAME";
+    else
+        case $RESOURCE_TYPE in
+            deployment)
+            deploy "$RESOURCE_NAME" "$CONTAINER_NAME" "$IMG" "$DEPLOYMENT_PATH" "$IMG_PREFIX";;
+            job)
+            start_job "$RESOURCE_PATH" "$IMG" "$(date +%s)";;
+            *)
+            exit 1
+        esac
+    fi
+fi
 
 result="$(jq -n "{version:{container:\"$IMG\"}}")"
 echo "Out complete"

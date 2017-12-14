@@ -25,7 +25,7 @@ deploy() {
     if [[ -n "$DEPLOYMENT_PATH" ]] && [[ "$DEPLOYMENT_PATH" != "null" ]] && [[ -n "$IMG_PREFIX" ]] && [[ "$IMG_PREFIX" != "null" ]]; then
         echo "Deployment path set to $DEPLOYMENT_PATH"
         echo "Image prefix set to $IMG_PREFIX"
-        cat "${DEPLOYMENT_PATH}" | sed "s~image:[ \t]*\($IMG_PREFIX\/.*\).*~$IMAGE~" | $KUBECTL replace --record -f -
+        cat "${DEPLOYMENT_PATH}" | sed "s~image:[ \t]*\($IMG_PREFIX\/.*\).*~image: $IMAGE~" | $KUBECTL replace --record -f -
     else
         echo 'Setting image only.'
         $KUBECTL set image "deployment/$DEPLOYMENT" "$CONTAINER=$IMAGE" --record

@@ -117,11 +117,11 @@ if [[ "$RESOURCE_TYPE" = 'deployment' ]]; then
             DEPLOYMENT_PATH=$(jq -r .source.deployment_file < "$payload")
             IMG_PREFIX=$(jq -r .source.image_prefix < "$payload")
 
-            if [[ -z "DEPLOYMENT_PATH" ]]; then
+            if [[ "$DEPLOYMENT_PATH" == "null" ]]; then
                 DEPLOYMENT_PATH=$(jq -r .params.deployment_file < "$payload")
             fi
 
-            if [[ -z "IMG_PREFIX" ]]; then
+            if [[ "$IMG_PREFIX" == "null" ]]; then
                 IMG_PREFIX=$(jq -r .params.image_prefix < "$payload")
             fi
 

@@ -11,9 +11,12 @@ cat > "$payload" <&0
 
 rollback() {
     DEPLOYMENT=$1
+    DRY_RUN=$2
     [ -n "$DEPLOYMENT" ] || exit 1
     echo "Running: $KUBECTL rollout undo deployment/$DEPLOYMENT"
-    $KUBECTL rollout undo "deployment/$DEPLOYMENT"
+    if [ -z "$DRY_RUN" ] || [[ "$DRY_RUN" = "false" ]]; then
+        $KUBECTL rollout undo "deployment/$DEPLOYMENT"
+    fi
 }
 
 deploy() {
@@ -22,6 +25,7 @@ deploy() {
     IMAGE=$3
     DEPLOYMENT_PATH=$4
     IMG_PREFIX=$5
+    DRY_RUN=$6
 
     [ -n "$DEPLOYMENT" ] || exit 1
     [ -n "$IMAGE" ] || exit 1
@@ -32,10 +36,14 @@ deploy() {
     if [[ -n "$DEPLOYMENT_PATH" ]] && [[ "$DEPLOYMENT_PATH" != "null" ]] && [[ -n "$IMG_PREFIX" ]] && [[ "$IMG_PREFIX" != "null" ]]; then
         echo "Deployment path set to $DEPLOYMENT_PATH"
         echo "Image prefix set to $IMG_PREFIX"
-        cat "${DEPLOYMENT_PATH}" | sed "s~image:[ \t]*\($IMG_PREFIX\/.*\).*~image: $IMAGE~" | $KUBECTL replace --record -f -
+        if [[ -z "$DRY_RUN" ]] || [[ "$DRY_RUN" = "false" ]]; then
+            cat "${DEPLOYMENT_PATH}" | sed "s~image:[ \t]*\($IMG_PREFIX\/.*\).*~image: $IMAGE~" | $KUBECTL replace --record -f -
+        fi
     else
         echo 'Setting image only.'
-        $KUBECTL set image "deployment/$DEPLOYMENT" "$CONTAINER=$IMAGE" --record
+        if [[ -z "$DRY_RUN" ]] || [[ "$DRY_RUN" = "false" ]]; then
+            $KUBECTL set image "deployment/$DEPLOYMENT" "$CONTAINER=$IMAGE" --record
+        fi
     fi
 }
 
@@ -43,12 +51,15 @@ start_job() {
     JOB=$1
     IMAGE=$2
     UID=${3:-$(date +%s)}
+    DRY_RUN=$4
 
     [ -n "$JOB" ] || exit 1
     [ -n "$IMAGE" ] || exit 1
     [ -n "$UID" ] || exit 1
 
-    cat "$JOB" | IMAGE=$IMAGE UID=$UID envsubst | $KUBECTL create --record -f -
+    if [[ -z "$DRY_RUN" ]] || [[ "$DRY_RUN" = "false" ]]; then
+        cat "$JOB" | IMAGE=$IMAGE UID=$UID envsubst | $KUBECTL create --record -f -
+    fi
 }
 
 DEBUG=$(jq -r .source.debug < "$payload")
@@ -85,6 +96,7 @@ export KUBECTL
 ROLLBACK=$(jq -r .params.rollback < "$payload")
 RESOURCE_TYPE=$(jq -r .source.resource_type < "$payload")
 RESOURCE_NAME=$(jq -r .source.resource_name < "$payload")
+DRY_RUN=$(jq -r .params.dry_run < "$payload")
 
 if [[ -z "$RESOURCE_TYPE" ]]; then
     RESOURCE_TYPE=$(jq -r .params.resource_type < "$payload")
@@ -96,7 +108,7 @@ fi
 
 if [[ "$RESOURCE_TYPE" = 'deployment' ]]; then
     if [[ "$ROLLBACK" = "true" ]]; then
-        rollback "$RESOURCE_NAME";
+        rollback "$RESOURCE_NAME" "$DRY_RUN";
     else
         case $RESOURCE_TYPE in
             deployment)
@@ -123,9 +135,9 @@ if [[ "$RESOURCE_TYPE" = 'deployment' ]]; then
             TAG=$(cat "$TAG_FILE")
             IMG="$IMG:$TAG"
 
-            deploy "$RESOURCE_NAME" "$CONTAINER_NAME" "$IMG" "$DEPLOYMENT_PATH" "$IMG_PREFIX";;
+            deploy "$RESOURCE_NAME" "$CONTAINER_NAME" "$IMG" "$DEPLOYMENT_PATH" "$IMG_PREFIX" "$DRY_RUN";;
             job)
-            start_job "$RESOURCE_PATH" "$IMG" "$(date +%s)";;
+            start_job "$RESOURCE_PATH" "$IMG" "$(date +%s)" "$DRY_RUN";;
             *)
             exit 1
         esac

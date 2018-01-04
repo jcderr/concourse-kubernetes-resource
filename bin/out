@@ -14,7 +14,7 @@ rollback() {
     DRY_RUN=$2
     [ -n "$DEPLOYMENT" ] || exit 1
     echo "Running: $KUBECTL rollout undo deployment/$DEPLOYMENT"
-    if [ -z "$DRY_RUN" ] || [[ "$DRY_RUN" = "false" ]]; then
+    if [[ "$DRY_RUN" == "null" ]] || [[ "$DRY_RUN" == "false" ]]; then
         $KUBECTL rollout undo "deployment/$DEPLOYMENT"
     fi
 }
@@ -36,12 +36,12 @@ deploy() {
     if [[ -n "$DEPLOYMENT_PATH" ]] && [[ "$DEPLOYMENT_PATH" != "null" ]] && [[ -n "$IMG_PREFIX" ]] && [[ "$IMG_PREFIX" != "null" ]]; then
         echo "Deployment path set to $DEPLOYMENT_PATH"
         echo "Image prefix set to $IMG_PREFIX"
-        if [[ -z "$DRY_RUN" ]] || [[ "$DRY_RUN" = "false" ]]; then
+        if [[ "$DRY_RUN" == "null" ]] || [[ "$DRY_RUN" == "false" ]]; then
             cat "${DEPLOYMENT_PATH}" | sed "s~image:[ \t]*\($IMG_PREFIX\/.*\).*~image: $IMAGE~" | $KUBECTL replace --record -f -
         fi
     else
         echo 'Setting image only.'
-        if [[ -z "$DRY_RUN" ]] || [[ "$DRY_RUN" = "false" ]]; then
+        if [[ "$DRY_RUN" == "null" ]] || [[ "$DRY_RUN" == "false" ]]; then
             $KUBECTL set image "deployment/$DEPLOYMENT" "$CONTAINER=$IMAGE" --record
         fi
     fi
@@ -57,7 +57,7 @@ start_job() {
     [ -n "$IMAGE" ] || exit 1
     [ -n "$UID" ] || exit 1
 
-    if [[ -z "$DRY_RUN" ]] || [[ "$DRY_RUN" = "false" ]]; then
+    if [[ "$DRY_RUN" == "null" ]] || [[ "$DRY_RUN" == "false" ]]; then
         cat "$JOB" | IMAGE=$IMAGE UID=$UID envsubst | $KUBECTL create --record -f -
     fi
 }

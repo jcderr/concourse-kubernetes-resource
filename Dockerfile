@@ -3,7 +3,7 @@ FROM alpine:latest
 WORKDIR /tmp/build
 
 ENV runDependencies curl jq bash
-ENV kubectlURL https://storage.googleapis.com/kubernetes-release/release/v1.3.0/bin/linux/amd64/kubectl
+ENV kubectlURL https://storage.googleapis.com/kubernetes-release/release/v1.8.3/bin/linux/amd64/kubectl
 
 RUN apk --no-cache add ${runDependencies}; \
     curl -L -o /usr/local/bin/kubectl \
